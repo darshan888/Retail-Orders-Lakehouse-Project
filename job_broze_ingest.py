@@ -18,7 +18,6 @@ SRC_DB = args["source_database"]
 TABLES = ["orders", "customers", "products"]
 
 for tbl in TABLES:
-    # Job bookmarks make this incremental: files already ingested are skipped.
     dyf = glueContext.create_dynamic_frame.from_catalog(
         database=SRC_DB,
         table_name=tbl,
@@ -30,8 +29,7 @@ for tbl in TABLES:
 
     df = dyf.toDF()
 
-    # Bronze contract: faithful copy. Normalize column NAMES only, never values.
-    # Everything stays string so a bad value can never fail ingestion.
+    #Values stays in strings
     df = df.select([F.col(c).cast("string").alias(c.strip().lower()) for c in df.columns])
 
     df = (
@@ -46,7 +44,7 @@ for tbl in TABLES:
         updateBehavior="UPDATE_IN_DATABASE",
         partitionKeys=["ingest_date"],
         compression="snappy",
-        enableUpdateCatalog=True,          # creates/updates the table, no crawler needed
+        enableUpdateCatalog=True,         
         transformation_ctx=f"sink_{tbl}",
     )
     sink.setCatalogInfo(catalogDatabase="retail_bronze", catalogTableName=tbl)
