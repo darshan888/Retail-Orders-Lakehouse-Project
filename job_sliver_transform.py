@@ -13,8 +13,6 @@ spark = glueContext.spark_session
 job = Job(glueContext)
 job.init(args["JOB_NAME"], args)
 
-# Makes to_date() return NULL on unparseable input instead of raising
-# SparkUpgradeException, so we can try several formats with coalesce().
 spark.conf.set("spark.sql.legacy.timeParserPolicy", "LEGACY")
 
 BUCKET = args["target_bucket"]
@@ -43,7 +41,7 @@ def blank_to_null(col):
     return F.when(F.trim(F.col(col)) == "", None).otherwise(F.trim(F.col(col)))
 
 
-# ---------- dim_customers ----------
+# dim_customers
 dim_customers = (
     spark.table("retail_bronze.customers")
     .withColumn("customer_id", F.upper(blank_to_null("customer_id")))
@@ -61,7 +59,7 @@ dim_customers = (
 )
 write_silver(dim_customers, "dim_customers", [])
 
-# ---------- dim_products ----------
+# dim_products
 dim_products = (
     spark.table("retail_bronze.products")
     .withColumn("product_id", F.upper(blank_to_null("product_id")))
@@ -75,7 +73,7 @@ dim_products = (
 )
 write_silver(dim_products, "dim_products", [])
 
-# ---------- fact_orders ----------
+# fact_orders
 typed = (
     spark.table("retail_bronze.orders")
     .withColumn("order_id", F.upper(blank_to_null("order_id")))
@@ -92,7 +90,6 @@ typed = (
     .withColumn("channel", F.lower(blank_to_null("channel")))
 )
 
-# Dedupe: keep the most recently ingested version of each order_id.
 w = Window.partitionBy("order_id").orderBy(F.col("_ingest_ts").desc(),
                                            F.col("_source_file").desc())
 deduped = (
@@ -123,7 +120,6 @@ fact_orders = (
 )
 write_silver(fact_orders, "fact_orders", ["order_year", "order_month"])
 
-# ---------- quarantine: never silently drop a row ----------
 reject_reason = F.concat_ws("; ",
     F.when(F.col("customer_id").isNull(), F.lit("missing_customer_id")),
     F.when(F.col("product_id").isNull(), F.lit("missing_product_id")),
